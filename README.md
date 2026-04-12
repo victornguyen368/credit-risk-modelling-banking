@@ -19,27 +19,32 @@ End-to-end credit risk scorecard pipeline following industry-standard methodolog
 The pipeline covers the full model lifecycle as practiced in bank CRM (Credit Risk Modelling) teams:
 
 **Development**
+
 1. Data quality assessment and cleaning (outlier removal, grade-conditional imputation)
 2. WoE/IV feature selection: industry standard for credit scorecards
 3. Logistic regression scorecard with points-based calibration (base 600, PDO 20)
 4. XGBoost benchmark with SHAP global and local explanations
 
 **Validation**
+
 5. Gini, KS, CAP curve, PSI, calibration curve
 6. 5-fold stratified cross-validation (CV AUC: 0.875 ± 0.006)
 7. A/B comparison table: traditional vs ML approach
 
 **Regulatory & Accounting**
+
 8. Basel III IRB capital calculation using the ASRF framework
 9. IFRS 9 three-stage ECL classification (12-month vs lifetime PD)
 10. Macro-conditioned stress testing across four scenarios
 
 **Monitoring**
+
 11. Simulated 12-month production monitoring (monthly Gini/PSI tracking)
 12. Feature-level PSI for early drift detection
 13. Monitoring decision framework (monthly/quarterly/annual cadence)
 
 **Other**
+
 14. Early warning indicator framework (red-flag scoring)
 15. Fairness assessment: gender, education, marital status have IV ≈ 0
 
