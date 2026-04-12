@@ -1,0 +1,23 @@
+,IV,Predictive Power
+loan_grade,0.9075610280977275,Suspicious
+loan_percent_income,0.8799530189685258,Suspicious
+loan_int_rate,0.7489898536495267,Suspicious
+total_burden_to_income,0.5975704025272124,Suspicious
+debt_to_income_ratio,0.5975704025272124,Suspicious
+person_income,0.45709146346119434,Strong
+person_home_ownership,0.37475974804283185,Strong
+cb_person_default_on_file,0.16876786042813252,Medium
+loan_intent,0.0966946768895891,Weak
+loan_amnt,0.09234317666937153,Weak
+person_emp_length,0.061018443442258555,Weak
+person_age,0.010201749275775121,Unpredictive
+cb_person_cred_hist_length,0.004253321208956768,Unpredictive
+open_accounts,0.0020387203929272675,Unpredictive
+credit_utilization_ratio,0.0019557365107857696,Unpredictive
+loan_term_months,0.0006484803514768612,Unpredictive
+employment_type,0.0005403783975639986,Unpredictive
+education_level,0.00037491174477489054,Unpredictive
+past_delinquencies,0.0001045543717369638,Unpredictive
+marital_status,6.030235414609511e-05,Unpredictive
+gender,2.0304043124648764e-05,Unpredictive
+has_prior_default,0.0,Unpredictive
