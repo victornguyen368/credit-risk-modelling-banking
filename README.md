@@ -150,6 +150,22 @@ Identifying borrowers with multiple risk flags before default materializes.
 
 ---
 
+## 9. Production monitoring
+
+Building the model is half the job. The other half is monitoring it after deployment.
+
+![Monitoring dashboard](outputs/fig12_monitoring_dashboard.png)
+
+**What this shows (four panels):**
+- **Top left:** Monthly Gini tracking. The green dashed line is the development Gini. The red dashed line is the alert threshold (90% of development). When Gini drops below this, the model needs review.
+- **Top right:** Monthly PSI tracking. Green bars = stable. Yellow/red = population shift detected. The 0.10 and 0.25 thresholds are industry standard.
+- **Bottom left:** Calibration by score band (back-testing). Bars = observed default rate, dots = predicted PD. When these diverge, the model needs recalibration.
+- **Bottom right:** Feature-level PSI. Checks which specific inputs are drifting. This catches problems before the overall score PSI triggers.
+
+**Monitoring cadence:** Monthly for Gini and PSI. Quarterly for calibration review. Annually for full back-test and redevelopment assessment.
+
+---
+
 ## Technical details
 
 | | |
