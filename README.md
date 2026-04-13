@@ -1,135 +1,190 @@
-# Credit Risk Scorecard Development & Validation
+# Credit Risk Scorecard: Development, Validation & Monitoring
 
-End-to-end credit risk scorecard pipeline following industry-standard methodology used in bank risk modelling teams. Built on a 32,500+ borrower retail lending portfolio across USA, UK, and Canada.
+I built this project to get hands-on with credit risk modelling methodology. It follows the approach used in bank risk teams: WoE/IV feature selection, logistic regression scorecard, and the full validation and regulatory framework. It is academic work on a sample dataset, not production-grade, but it helped me understand the end-to-end lifecycle.
 
-## Key results
+**Dataset:** 32,581 retail borrowers across USA, UK, and Canada. 29 features. ~22% default rate.
 
-| Metric | LR Scorecard (production) | XGBoost + SHAP (benchmark) |
-|--------|--------------------------|---------------------------|
+---
+
+## 1. Understanding the data
+
+Before building any model, I explored which features show clear differences between defaulters and non-defaulters.
+
+![Default rates by segment](outputs/fig1_default_rate_segments.png)
+
+**What this shows:**
+- Loan grade is the strongest separator. Grade A borrowers default at 10%, Grade G at 98%. This makes sense because grade is partially derived from creditworthiness assessment.
+- Home ownership matters: renters default at 32% vs 7% for homeowners. Homeowners have more financial stability and collateral.
+- Prior default on the credit bureau is a strong signal: 38% default rate vs 18% for clean records. Past behavior predicts future behavior.
+- Loan purpose has moderate differences: debt consolidation and medical loans are riskier than education or venture loans.
+- Country shows no meaningful difference (US, UK, Canada all around 21-22%). Same for gender, education, and marital status.
+
+**Why this matters:** These patterns tell me where the scorecard will find its signal. They also tell me which features are safe to exclude for fair lending compliance (gender, education) because they add zero predictive value.
+
+---
+
+## 2. Feature selection with WoE/IV
+
+I used Weight of Evidence and Information Value, which is the standard method for feature selection in banking scorecards. The idea: for each feature, bin the values and measure how well each bin separates good borrowers from bad ones.
+
+![Information Value](outputs/fig3_information_value.png)
+
+**What this shows:**
+- Loan grade, loan-to-income ratio, and interest rate are the top predictors (IV > 0.5, though this high IV warrants caution about possible circularity with loan grade).
+- Income and home ownership are strong predictors (IV 0.3-0.5).
+- Credit bureau default flag is a medium predictor (IV = 0.17).
+- Gender (IV = 0.00002), marital status, education, employment type, and past delinquencies are all unpredictive. I excluded them from the model.
+
+**Why WoE/IV instead of generic feature importance:** Three reasons. (1) WoE handles non-linearity through binning. (2) It puts all features on the same scale, making logistic regression coefficients comparable. (3) Regulators and validators can inspect each bin, which is a requirement for production scorecards.
+
+---
+
+## 3. Two models: traditional scorecard vs ML benchmark
+
+I built two models side by side to compare them, which is how model governance works in practice.
+
+**Model A: Logistic Regression Scorecard** (the production candidate)
+- This is the traditional approach used by FICO, Experian, CBS Singapore, and banks like OCBC, DBS, UOB.
+- Fully interpretable: each coefficient maps directly to scorecard points.
+- Regulatorily accepted for Basel III IRB PD models.
+
+**Model B: XGBoost + SHAP** (the ML benchmark)
+- Higher predictive power but harder to explain.
+- SHAP provides post-hoc explainability.
+- Used by fintechs; increasingly explored by banks as a performance reference.
+
+### SHAP analysis: what drives the XGBoost model?
+
+![SHAP global importance](outputs/fig4_shap_global_importance.png)
+
+![SHAP beeswarm](outputs/fig5_shap_beeswarm.png)
+
+**What these show:**
+- The top features for XGBoost (loan-to-income, loan grade, income, home ownership) largely agree with the IV rankings. This is an important cross-validation: it means the logistic regression scorecard is not missing critical signals.
+- The beeswarm plot shows the direction of impact. For example, higher loan-to-income ratio (red dots on the right) pushes the prediction toward default. Higher income (red dots on the left for that feature) pushes away from default.
+
+![SHAP local explanation for one borrower](outputs/fig6_shap_local_explanation.png)
+
+**What this shows:** For one specific high-risk borrower, SHAP breaks down exactly which features pushed the prediction toward default. This is useful for explaining individual decisions, which is a regulatory requirement in some jurisdictions.
+
+---
+
+## 4. Model validation
+
+Banks evaluate credit risk models using Gini, KS, PSI, and calibration, not accuracy or AUC.
+
+![Validation metrics](outputs/fig7_model_validation.png)
+
+**Results:**
+
+| Metric | LR Scorecard | XGBoost |
+|--------|-------------|---------|
 | Gini (test) | 73.7% | 86.4% |
 | KS (test) | 59.7% | 71.7% |
-| Gini gap (train-test) | 2.0% ✓ Stable | 4.6% ✓ Acceptable |
-| PSI | 0.014 ✓ No drift | 0.001 ✓ No drift |
-| Regulatory accepted | Yes | Benchmark only |
+| Gini gap (train-test) | 2.0% | 4.6% |
+| PSI | 0.014 | 0.001 |
 
-**Recommendation:** Deploy LR scorecard for production. The 12.7-point Gini gap is the "cost of interpretability": acceptable given regulatory requirements. XGBoost validates the LR feature selection and serves as a monitoring benchmark.
+**What this tells me:**
+- The LR scorecard achieves a Gini of 73.7%, which is strong for a retail scorecard (typical range is 40-80%).
+- The XGBoost is 12.7 Gini points higher. That is the "cost of interpretability" we pay for choosing the regulatorily accepted model.
+- The LR scorecard is more stable: only 2% Gini gap between train and test, vs 4.6% for XGBoost. Less overfitting risk.
+- PSI of 0.014 is well below the 0.10 threshold, meaning the score distribution is stable between development and validation samples.
+- The calibration curve (right panel) shows predicted PDs roughly match observed default rates. This means the PD numbers can be trusted for ECL and capital calculations.
 
-## Methodology
+**My recommendation:** Deploy the LR scorecard for production. Keep XGBoost as a benchmark. If the LR Gini degrades over time but XGBoost holds, it signals the linear model is becoming inadequate and redevelopment should consider non-linear approaches.
 
-The pipeline covers the full model lifecycle as practiced in bank CRM (Credit Risk Modelling) teams:
+---
 
-**Development**
+## 5. Basel III IRB capital
 
-1. Data quality assessment and cleaning (outlier removal, grade-conditional imputation)
-2. WoE/IV feature selection: industry standard for credit scorecards
-3. Logistic regression scorecard with points-based calibration (base 600, PDO 20)
-4. XGBoost benchmark with SHAP global and local explanations
+The PD from the scorecard feeds directly into the Basel III capital formula. Using the ASRF (Asymptotic Single Risk Factor) framework, I calculated how much capital the bank needs to hold for each loan.
 
-**Validation**
+![Basel capital](outputs/fig8_basel_irb_capital.png)
 
-5. Gini, KS, CAP curve, PSI, calibration curve
-6. 5-fold stratified cross-validation (CV AUC: 0.875 ± 0.006)
-7. A/B comparison table: traditional vs ML approach
+**What this shows:**
+- The left panel compares the base PD (current conditions) with the stressed PD (99.9% worst-case economy scenario). For high-risk borrowers, the stressed PD is dramatically higher.
+- The right panel shows the capital requirement as a percentage of exposure. Low-risk borrowers need minimal capital. High-risk borrowers can require 10%+ of the loan amount as capital.
+- The logic: capital covers the gap between expected loss (average) and stressed loss (tail scenario). This is "unexpected loss" that equity must absorb.
 
-**Regulatory & Accounting**
+---
 
-8. Basel III IRB capital calculation using the ASRF framework
-9. IFRS 9 three-stage ECL classification (12-month vs lifetime PD)
-10. Macro-conditioned stress testing across four scenarios
+## 6. IFRS 9 expected credit loss
 
-**Monitoring**
+IFRS 9 requires forward-looking provisioning. Loans are classified into three stages based on credit deterioration.
 
-11. Simulated 12-month production monitoring (monthly Gini/PSI tracking)
-12. Feature-level PSI for early drift detection
-13. Monitoring decision framework (monthly/quarterly/annual cadence)
+![IFRS 9 staging](outputs/fig9_ifrs9_staging.png)
 
-**Other**
+**What this shows:**
+- Stage 1 (performing): 63% of the portfolio. Provision = 12-month ECL only.
+- Stage 2 (watch): 15% of the portfolio. SICR (Significant Increase in Credit Risk) detected. Provision jumps to lifetime ECL, which can be 3x the Stage 1 provision even without the borrower missing a payment.
+- Stage 3 (defaulted): 22% of the portfolio. Provision = LGD x EAD.
 
-14. Early warning indicator framework (red-flag scoring)
-15. Fairness assessment: gender, education, marital status have IV ≈ 0
+**Key difference from Basel:** IFRS 9 uses Point-in-Time PD (reflects current conditions). Basel uses Through-the-Cycle PD (long-run average). Same scorecard, same borrower, different PD adjustment depending on the purpose.
 
-## Approach comparison
+---
 
-This project explicitly builds and compares both traditional and ML approaches:
+## 7. Stress testing
 
-| | Traditional (Approach 1) | ML-based (Approach 2) |
-|---|---|---|
-| **Method** | WoE + Logistic Regression | XGBoost + SHAP |
-| **Used by** | Banks (FICO, Experian, CBS) | Fintechs, research |
-| **Strength** | Interpretable, regulatorily accepted, stable | Higher discrimination, captures non-linearity |
-| **Weakness** | Misses non-linear patterns | Black-box, regulatory skepticism |
-| **In this project** | Production model | Benchmark |
+What happens to the portfolio if the economy crashes?
 
-## Project structure
+![Stress testing](outputs/fig10_stress_testing.png)
 
-```
-credit-risk-scorecard/
-├── README.md
-├── requirements.txt
-├── credit_risk_scorecard.py          # Full script (runs end-to-end)
-├── data/
-│   └── Credit_Risk_Dataset.xlsx      # 32,581 borrowers, 29 features
-├── notebooks/
-│   └── credit_risk_scorecard.ipynb   # Jupyter notebook version
-└── outputs/
-    ├── fig1_default_rate_segments.png
-    ├── fig2_correlation_heatmap.png
-    ├── fig3_information_value.png
-    ├── fig4_shap_global_importance.png
-    ├── fig5_shap_beeswarm.png
-    ├── fig6_shap_local_explanation.png
-    ├── fig7_model_validation.png
-    ├── fig8_basel_irb_capital.png
-    ├── fig9_ifrs9_staging.png
-    ├── fig10_stress_testing.png
-    ├── fig11_early_warning.png
-    ├── fig12_monitoring_dashboard.png
-    ├── model_metrics.csv
-    ├── information_value.csv
-    ├── basel_capital_by_band.csv
-    ├── ifrs9_staging.csv
-    └── stress_test_results.csv
-```
+**What this shows:**
+- Under the baseline scenario, ECL is $10.3M.
+- Under severe stress (GDP -3%, unemployment +4%), ECL increases to $16.4M, roughly 1.6x the baseline.
+- Under a systemic crisis scenario, ECL reaches $19.8M.
+- This helps management assess whether the bank has enough capital to absorb losses under adverse conditions.
 
-## Quick start
+---
+
+## 8. Early warning framework
+
+Identifying borrowers with multiple risk flags before default materializes.
+
+![Early warning](outputs/fig11_early_warning.png)
+
+**What this shows:**
+- Borrowers with 0 risk flags have a 5% default rate. With 4+ flags, it jumps to 70%+.
+- Risk flags include: high DTI, high loan-to-income, high interest rate, renter status, prior default on bureau, risky loan grade.
+- This can be deployed as a monthly monitoring trigger: when a borrower moves from 1 flag to 3 flags, proactive outreach should begin (restructuring offers, payment counseling).
+
+---
+
+## 9. Production monitoring
+
+Building the model is half the job. The other half is monitoring it after deployment.
+
+![Monitoring dashboard](outputs/fig12_monitoring_dashboard.png)
+
+**What this shows (four panels):**
+- **Top left:** Monthly Gini tracking. The green dashed line is the development Gini. The red dashed line is the alert threshold (90% of development). When Gini drops below this, the model needs review.
+- **Top right:** Monthly PSI tracking. Green bars = stable. Yellow/red = population shift detected. The 0.10 and 0.25 thresholds are industry standard.
+- **Bottom left:** Calibration by score band (back-testing). Bars = observed default rate, dots = predicted PD. When these diverge, the model needs recalibration.
+- **Bottom right:** Feature-level PSI. Checks which specific inputs are drifting. This catches problems before the overall score PSI triggers.
+
+**Monitoring cadence:** Monthly for Gini and PSI. Quarterly for calibration review. Annually for full back-test and redevelopment assessment.
+
+---
+
+## Technical details
+
+| | |
+|---|---|
+| **Models** | Logistic Regression (production), XGBoost (benchmark) |
+| **Validation** | Gini, KS, PSI, calibration curve, 5-fold stratified CV |
+| **Stack** | Python, scikit-learn, XGBoost, SHAP, pandas, matplotlib |
+
+**References:**
+1. Basel Committee (1999). Credit Risk Modelling: Current Practices and Applications.
+2. Noguer i Alonso & Sun (2025). Credit Risk Modeling for Financial Institutions. SSRN.
+3. Golec & AlabdulJalil (2025). Interpretable LLMs for Credit Risk. arXiv:2506.04290.
+4. Hlongwane et al. (2024). Leveraging Shapley values for interpretable credit scorecards. PLoS ONE.
+
+## How to run
 
 ```bash
-pip install pandas numpy scikit-learn matplotlib seaborn scipy xgboost shap openpyxl
+pip install -r requirements.txt
 python credit_risk_scorecard.py
 ```
 
-Or open `notebooks/credit_risk_scorecard.ipynb` in Jupyter.
-
-## Sample outputs
-
-### Information Value: feature selection
-![IV](outputs/fig3_information_value.png)
-
-### SHAP global feature importance
-![SHAP](outputs/fig4_shap_global_importance.png)
-
-### Model validation (ROC, KS, calibration)
-![Validation](outputs/fig7_model_validation.png)
-
-### Basel III IRB capital by score band
-![Basel](outputs/fig8_basel_irb_capital.png)
-
-### IFRS 9 stage classification
-![IFRS9](outputs/fig9_ifrs9_staging.png)
-
-### Stress testing
-![Stress](outputs/fig10_stress_testing.png)
-
-### Production monitoring dashboard
-![Monitoring](outputs/fig12_monitoring_dashboard.png)
-
-## References
-
-1. Basel Committee on Banking Supervision (1999). *Credit Risk Modelling: Current Practices and Applications.*
-2. Noguer i Alonso, M. & Sun, Y. (2025). *Credit Risk Modeling for Financial Institutions.* SSRN.
-3. Golec, M. & AlabdulJalil, M. (2025). *Interpretable LLMs for Credit Risk: A Systematic Review and Taxonomy.* arXiv:2506.04290.
-4. Hlongwane, R., Ramabao, K. & Mongwe, W. (2024). *A novel framework for enhancing transparency in credit scoring: Leveraging Shapley values for interpretable credit scorecards.* PLoS ONE 19(8).
-
-## License
-
-This project is for educational and portfolio purposes.
+Or open `notebooks/credit_risk_scorecard.ipynb` in Jupyter/Colab.
