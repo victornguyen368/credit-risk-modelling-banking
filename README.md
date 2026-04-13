@@ -188,3 +188,137 @@ python credit_risk_scorecard.py
 ```
 
 Or open `notebooks/credit_risk_scorecard.ipynb` in Jupyter/Colab.
+
+---
+
+## Formula Reference
+
+All formulas used throughout the project.
+
+### Expected Loss
+```
+EL = PD x LGD x EAD
+```
+- PD = probability of default (from the scorecard)
+- LGD = loss given default (45% for unsecured retail, Basel Foundation IRB)
+- EAD = exposure at default (outstanding loan amount)
+
+### Weight of Evidence
+```
+WoE_i = ln(% of non-defaults in bin_i / % of defaults in bin_i)
+```
+- Positive WoE = more good borrowers in this bin (safer)
+- Negative WoE = more bad borrowers (riskier)
+
+### Information Value
+```
+IV = sum over all bins of: (% non-default_i - % default_i) x WoE_i
+```
+- < 0.02 unpredictive, 0.02-0.1 weak, 0.1-0.3 medium, 0.3-0.5 strong, > 0.5 suspicious
+
+### Logistic Regression
+```
+log_odds = B0 + B1 x WoE_1 + B2 x WoE_2 + ... + Bn x WoE_n
+PD = 1 / (1 + e^(-log_odds))
+```
+- B0 = intercept, B1...Bn = coefficients (both estimated from data)
+- The coefficients become scorecard point weights
+
+### Scorecard Points Conversion
+```
+Factor = PDO / ln(2)
+Offset = Base Score - Factor x ln(Base Odds)
+Score  = Offset + Factor x ln((1 - PD) / PD)
+```
+- Base Score = 600, Base Odds = 50:1, PDO = 20 (industry conventions)
+- Points are additive because logistic regression is linear in log-odds
+
+### Gini Coefficient
+```
+Gini = 2 x AUC - 1
+```
+- 0 = random model, 1 = perfect model
+- Retail scorecards: 40-80% is typical
+
+### KS Statistic
+```
+KS = max |cumulative_bad_rate(s) - cumulative_good_rate(s)|
+```
+- Maximum separation between cumulative distributions of defaulters vs non-defaulters
+
+### PSI (Population Stability Index)
+```
+PSI = sum over all bins of: (Actual%_i - Expected%_i) x ln(Actual%_i / Expected%_i)
+```
+- < 0.10 stable, 0.10-0.25 investigate, > 0.25 model may need rebuilding
+
+### Recalibration
+```
+log_odds_new = a + b x log_odds_old
+PD_new = 1 / (1 + e^(-log_odds_new))
+```
+- a shifts all PDs up/down, b compresses/stretches the range
+- Rank ordering is preserved (Gini and KS unchanged)
+
+### Basel III IRB Capital (ASRF Framework)
+
+Step 1, asset correlation (prescribed by regulator, not chosen by bank):
+```
+f = (1 - e^(-35 x PD)) / (1 - e^(-35))
+rho = 0.03 x f + 0.16 x (1 - f)
+```
+
+Step 2, stressed PD at 99.9% confidence:
+```
+PD_stressed = Phi( [Phi_inv(PD) + sqrt(rho) x Phi_inv(0.999)] / sqrt(1 - rho) )
+```
+- Phi = standard normal CDF, Phi_inv = its inverse, Phi_inv(0.999) = 3.0902
+
+Step 3, capital requirement:
+```
+K = LGD x (PD_stressed - PD)
+```
+
+Step 4, risk-weighted assets:
+```
+RWA = K x 12.5 x EAD
+```
+- 12.5 = 1/0.08 (Basel minimum capital ratio is 8%)
+
+### IFRS 9 Expected Credit Loss
+
+Stage 1 (performing):
+```
+ECL = PD_12month x LGD x EAD
+```
+
+Stage 2 (SICR detected):
+```
+Lifetime_PD = 1 - (1 - PD_annual)^T
+ECL = Lifetime_PD x LGD x EAD
+```
+
+Stage 3 (defaulted):
+```
+ECL = LGD x EAD
+```
+
+Scenario-weighted final ECL:
+```
+ECL_final = w1 x ECL_base + w2 x ECL_upside + w3 x ECL_downside + ...
+```
+
+### Stress Testing (satellite model)
+```
+ln(PD_stressed / (1 - PD_stressed)) = a + b1 x GDP + b2 x unemployment + b3 x rates
+```
+- Coefficients estimated from historical macro-to-default data
+- Each scenario plugs in different macro assumptions
+
+---
+
+**References:**
+1. Basel Committee (1999). Credit Risk Modelling: Current Practices and Applications.
+2. Noguer i Alonso & Sun (2025). Credit Risk Modeling for Financial Institutions. SSRN.
+3. Golec & AlabdulJalil (2025). Interpretable LLMs for Credit Risk. arXiv:2506.04290.
+4. Hlongwane et al. (2024). Leveraging Shapley values for interpretable credit scorecards. PLoS ONE.
