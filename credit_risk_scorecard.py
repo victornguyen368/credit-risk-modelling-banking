@@ -5,8 +5,8 @@ CREDIT RISK SCORECARD DEVELOPMENT & VALIDATION: ENHANCED EDITION
 Nova Bank: Retail Credit Risk Modelling
 ================================================================================
 
-Author: [Your Name]
-Date: April 2026
+Author: Victor Nguyen
+Date: 12 April 2026
 
 End-to-end credit risk scorecard pipeline aligned with current industry practices:
 
@@ -367,6 +367,7 @@ for feat in all_model_feats:
     except:
         pass
 
+# Convert all columns to float first (older pandas can't fillna on Categorical dtype)
 X_train_woe = X_train_woe.dropna(axis=1, how='all')
 for col in X_train_woe.columns:
     X_train_woe[col] = pd.to_numeric(X_train_woe[col], errors='coerce')
@@ -376,7 +377,6 @@ X_test_woe = X_test_woe.dropna(axis=1, how='all')
 for col in X_test_woe.columns:
     X_test_woe[col] = pd.to_numeric(X_test_woe[col], errors='coerce')
 X_test_woe = X_test_woe.fillna(0)
-
 common_cols = X_train_woe.columns.intersection(X_test_woe.columns)
 X_train_woe = X_train_woe[common_cols]
 X_test_woe = X_test_woe[common_cols]
@@ -412,7 +412,7 @@ X_train_ml = X_train_ml.drop(columns=[c for c in drop_cols if c in X_train_ml.co
 X_test_ml = X_test_ml.drop(columns=[c for c in drop_cols if c in X_test_ml.columns], errors='ignore')
 
 le_dict = {}
-for col in X_train_ml.select_dtypes(include=['object']).columns:
+for col in X_train_ml.select_dtypes(include=['object','str','string']).columns:
     le = LabelEncoder()
     X_train_ml[col] = le.fit_transform(X_train_ml[col].astype(str))
     X_test_ml[col] = X_test_ml[col].astype(str).map(
@@ -671,9 +671,9 @@ def basel_irb_capital(pd_val, lgd=0.45, maturity=2.5, ead=1.0):
           0.16 * (1 - (1 - np.exp(-35 * pd_val)) / (1 - np.exp(-35)))
 
     # Conditional PD at 99.9% confidence
-    pd_stressed = norm.ppf(
-        (norm.ppf(pd_val) + np.sqrt(rho) * norm.ppf(0.999)) / np.sqrt(1 - rho)
-    )
+    # norm.ppf converts PD to z-score, then we stress it, then norm.cdf converts back to probability
+    z_stressed = (norm.ppf(pd_val) + np.sqrt(rho) * norm.ppf(0.999)) / np.sqrt(1 - rho)
+    pd_stressed = norm.cdf(z_stressed)
     # Clip to valid range
     pd_stressed = np.clip(pd_stressed, 0, 1)
 
