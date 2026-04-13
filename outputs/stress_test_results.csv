@@ -1,5 +1,5 @@
 Scenario,PD Multiplier,Avg PD,Total ECL ($M),ECL Rate,Capital ($M),Capital Rate
-Baseline,1.0x,20.7%,10.26,11.06%,nan,nan%
-Mild Downturn (GDP -1%),1.5x,28.9%,14.04,15.14%,nan,nan%
-Severe Stress (GDP -3%),2.0x,34.4%,16.45,17.73%,nan,nan%
-Systemic Crisis,3.0x,42.7%,19.76,21.30%,nan,nan%
+Baseline,1.0x,20.7%,10.26,11.06%,5.68,6.13%
+Mild Downturn (GDP -1%),1.5x,28.9%,14.04,15.14%,5.17,5.58%
+Severe Stress (GDP -3%),2.0x,34.4%,16.45,17.73%,4.94,5.33%
+Systemic Crisis,3.0x,42.7%,19.76,21.30%,4.67,5.03%
